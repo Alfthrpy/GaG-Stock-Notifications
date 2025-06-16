@@ -4,13 +4,20 @@ from supabase import create_client, Client
 import time
 
 
-# Konfigurasi aplikasi
-MAX_KEYWORDS_PER_USER = 5
+
+
 
 # Koneksi ke Supabase
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Ambil highest unlocked milestone
+milestones = supabase.table("community_unlocks").select("*").eq("unlocked", True).order("max_keywords_allowed", desc=True).execute().data
+if milestones:
+    MAX_KEYWORDS_PER_USER = milestones[0]['max_keywords_allowed']
+else:
+    MAX_KEYWORDS_PER_USER = 5  # fallback default
 
 # --- FUNGSI CACHING ---
 @st.cache_data(ttl=300)  # Cache selama 5 menit
@@ -213,9 +220,9 @@ else:
                 st.rerun()
 
     # --- SECTION TAMBAHAN: INFO CACHE DAN DEBUG ---
-    if st.checkbox("Tampilkan Info Debug", key="debug_mode"):
+    if st.checkbox("Tampilkan Info", key="debug_mode"):
         st.divider()
-        st.subheader("🔧 Debug Information")
+        st.subheader("Additional Information")
         
         col_debug1, col_debug2 = st.columns(2)
         
