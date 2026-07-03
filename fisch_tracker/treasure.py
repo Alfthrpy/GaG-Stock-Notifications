@@ -15,13 +15,15 @@ FIRST_SPAWN_SECONDS = 60 * 60
 SPAWN_DURATION_SECONDS = 10 * 60
 CYCLE_SECONDS = 70 * 60
 
-DEFAULT_RECENCY_THRESHOLD_SECONDS = 300
-
-# Regular sweeps sample low-population servers first, so a confirmed
-# server with moderate/high population may not get re-swept (and its
-# last_seen refreshed) for a long time even while still alive. Use a
-# far more generous window for confirmed sightings so they don't
-# vanish from the list just because our sampling missed them.
+# Regular sweeps sample low-population servers first. A server passing
+# the growth check (tracker.is_age_reliable) has, by definition, grown
+# past the lowest-population band our shallow ticks prioritize -- so it
+# stops getting resampled (and last_seen refreshed) almost as soon as it
+# proves itself. Confirmed servers have the same problem for the same
+# reason (moderate/high population = rarely resampled). Both tiers need
+# a generous window so they don't vanish just because our sampling,
+# rather than the server itself, went quiet.
+DEFAULT_RECENCY_THRESHOLD_SECONDS = 6 * 3600
 DEFAULT_CONFIRMED_RECENCY_THRESHOLD_SECONDS = 6 * 3600
 
 

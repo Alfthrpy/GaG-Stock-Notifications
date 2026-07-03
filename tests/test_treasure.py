@@ -107,6 +107,28 @@ def test_rank_excludes_servers_discovered_with_high_playing():
     assert ranked == []
 
 
+def test_rank_keeps_growth_verified_unconfirmed_server_despite_being_resampled_over_an_hour_ago():
+    # a server that grows past the lowest-population band stops getting
+    # resampled by our shallow (low-population-first) sweeps almost as
+    # soon as it proves itself via growth -- it shouldn't be treated as
+    # "closed" just because our sampling, not the server, went quiet.
+    now = EPOCH + timedelta(hours=5)
+    sightings = [
+        _sighting(
+            "job-grown-not-resampled",
+            first_seen=now - timedelta(minutes=40),
+            first_seen_playing=1,
+            playing=4,
+            last_seen=now - timedelta(hours=1),
+        ),
+    ]
+
+    ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now)
+
+    assert len(ranked) == 1
+    assert ranked[0].job_id == "job-grown-not-resampled"
+
+
 def test_rank_excludes_unconfirmed_server_whose_population_never_grew():
     # chronically idle old server: low playing count then and now, no
     # growth -- indistinguishable from a real new server by snapshot
