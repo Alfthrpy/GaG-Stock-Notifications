@@ -239,6 +239,18 @@ def test_delete_stale_sightings_deletes_rows_older_than_given_time():
     assert ("lt", ("last_seen", older_than.isoformat()), {}) in client.query.calls
 
 
+def test_delete_sighting_deletes_a_single_job_id():
+    client = FakeSupabaseClient(data=[])
+    repo = SupabaseSightingsRepository(client, place_id=42)
+
+    repo.delete_sighting("job-dead-1")
+
+    assert client.table_names == ["fisch_server_sightings"]
+    assert ("delete", (), {}) in client.query.calls
+    assert ("eq", ("place_id", 42), {}) in client.query.calls
+    assert ("eq", ("job_id", "job-dead-1"), {}) in client.query.calls
+
+
 def test_upsert_sightings_sends_rows_with_on_conflict_place_id_job_id():
     client = FakeSupabaseClient()
     repo = SupabaseSightingsRepository(client, place_id=42)

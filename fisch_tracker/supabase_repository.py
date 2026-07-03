@@ -123,3 +123,12 @@ class SupabaseSightingsRepository:
             .lt("last_seen", older_than.isoformat())
             .execute()
         )
+
+    def delete_sighting(self, job_id: str) -> None:
+        (
+            self._client.table(TABLE)
+            .delete()
+            .eq("place_id", self._place_id)
+            .eq("job_id", job_id)
+            .execute()
+        )

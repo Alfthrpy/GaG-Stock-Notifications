@@ -190,6 +190,28 @@ async def confirm_age(job_id: str, body: ConfirmAgeRequest) -> dict[str, Any]:
     return {"status": "ok", "job_id": job_id}
 
 
+@app.post("/api/servers/{job_id}/mark-dead")
+async def mark_dead(job_id: str) -> dict[str, Any]:
+    def _delete() -> None:
+        repository = _get_repository()
+        repository.delete_sighting(job_id)
+
+    try:
+        await asyncio.to_thread(_delete)
+    except Exception:
+        logger.exception("failed to mark job_id=%s as dead", job_id)
+        raise HTTPException(status_code=500, detail="failed to delete server")
+
+    # push the update immediately instead of waiting for the next periodic tick
+    try:
+        payload = await asyncio.to_thread(get_ranked_servers_sync)
+        await manager.broadcast(payload)
+    except Exception:
+        logger.exception("failed to broadcast after mark-dead")
+
+    return {"status": "ok", "job_id": job_id}
+
+
 @app.websocket("/ws/servers")
 async def servers_websocket(websocket: WebSocket) -> None:
     await manager.connect(websocket)

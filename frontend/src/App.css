@@ -239,6 +239,23 @@ header h1 {
   cursor: default;
 }
 
+.modal-mark-dead {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #d1242f;
+  background: transparent;
+  color: #d1242f;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.modal-mark-dead:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .modal-result {
   margin-top: 12px;
   font-size: 0.85rem;

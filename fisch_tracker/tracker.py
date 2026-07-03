@@ -100,6 +100,12 @@ class SightingsRepository(Protocol):
         age_confirmed, bypassing the heuristic reliability checks."""
         ...
 
+    def delete_sighting(self, job_id: str) -> None:
+        """Permanently remove a single job_id, e.g. after a user reports the
+        server has closed. job_ids are never reused by Roblox, so this is
+        safe: a future sighting of the same job_id can never occur."""
+        ...
+
 
 def compute_age_seconds(first_seen: datetime, now: datetime) -> float:
     if now < first_seen:

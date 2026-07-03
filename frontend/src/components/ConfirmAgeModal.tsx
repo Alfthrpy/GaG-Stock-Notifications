@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { confirmAge } from "../api";
+import { confirmAge, markDead } from "../api";
 
 interface Props {
   jobId: string;
@@ -11,6 +11,7 @@ export function ConfirmAgeModal({ jobId, onClose }: Props) {
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [markingDead, setMarkingDead] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +31,23 @@ export function ConfirmAgeModal({ jobId, onClose }: Props) {
       setError(err instanceof Error ? err.message : "Gagal nyimpen laporan.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleMarkDead() {
+    if (!window.confirm(`Yakin server ${jobId} udah mati? Ini bakal ngapus datanya permanen.`)) {
+      return;
+    }
+
+    setMarkingDead(true);
+    setError(null);
+    try {
+      await markDead(jobId);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal nandain server mati.");
+    } finally {
+      setMarkingDead(false);
     }
   }
 
@@ -81,10 +99,19 @@ export function ConfirmAgeModal({ jobId, onClose }: Props) {
             </label>
           </div>
 
-          <button type="submit" className="modal-submit" disabled={submitting}>
+          <button type="submit" className="modal-submit" disabled={submitting || markingDead}>
             {submitting ? "Ngirim..." : "Kirim Laporan"}
           </button>
         </form>
+
+        <button
+          type="button"
+          className="modal-mark-dead"
+          onClick={handleMarkDead}
+          disabled={submitting || markingDead}
+        >
+          {markingDead ? "Nandain..." : "Server Ini Udah Mati"}
+        </button>
 
         {result && <p className="modal-result modal-result-ok">{result}</p>}
         {error && <p className="modal-result modal-result-error">{error}</p>}
