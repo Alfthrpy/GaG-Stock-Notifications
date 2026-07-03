@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fisch_tracker.supabase_repository import SupabaseSightingsRepository
-from fisch_tracker.tracker import ServerSighting
+from fisch_tracker.tracker import FirstSeenRecord, ServerSighting
 
 T0 = datetime(2026, 7, 3, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -30,6 +30,14 @@ class FakeQuery:
         self.calls.append(("in_", args, kwargs))
         return self
 
+    def order(self, *args, **kwargs):
+        self.calls.append(("order", args, kwargs))
+        return self
+
+    def limit(self, *args, **kwargs):
+        self.calls.append(("limit", args, kwargs))
+        return self
+
     def upsert(self, *args, **kwargs):
         self.calls.append(("upsert", args, kwargs))
         return self
@@ -48,35 +56,64 @@ class FakeSupabaseClient:
         return self.query
 
 
-def test_get_first_seen_map_returns_empty_dict_without_querying_when_no_job_ids():
+def test_get_first_seen_records_returns_empty_dict_without_querying_when_no_job_ids():
     client = FakeSupabaseClient()
     repo = SupabaseSightingsRepository(client, place_id=42)
 
-    result = repo.get_first_seen_map([])
+    result = repo.get_first_seen_records([])
 
     assert result == {}
     assert client.table_names == []
 
 
-def test_get_first_seen_map_parses_rows_into_utc_datetimes():
+def test_get_first_seen_records_parses_rows():
     client = FakeSupabaseClient(
-        data=[{"job_id": "job-1", "first_seen": "2026-07-03T10:00:00+00:00"}]
+        data=[{"job_id": "job-1", "first_seen": "2026-07-03T10:00:00+00:00", "first_seen_playing": 2}]
     )
     repo = SupabaseSightingsRepository(client, place_id=42)
 
-    result = repo.get_first_seen_map(["job-1", "job-2"])
+    result = repo.get_first_seen_records(["job-1", "job-2"])
 
-    assert result == {"job-1": datetime(2026, 7, 3, 10, 0, 0, tzinfo=timezone.utc)}
+    assert result == {
+        "job-1": FirstSeenRecord(
+            first_seen=datetime(2026, 7, 3, 10, 0, 0, tzinfo=timezone.utc), first_seen_playing=2
+        )
+    }
     assert client.table_names == ["fisch_server_sightings"]
     assert ("eq", ("place_id", 42), {}) in client.query.calls
     assert ("in_", ("job_id", ["job-1", "job-2"]), {}) in client.query.calls
+
+
+def test_get_epoch_returns_none_when_no_rows():
+    client = FakeSupabaseClient(data=[])
+    repo = SupabaseSightingsRepository(client, place_id=42)
+
+    assert repo.get_epoch() is None
+
+
+def test_get_epoch_returns_earliest_first_seen():
+    client = FakeSupabaseClient(data=[{"first_seen": "2026-07-01T00:00:00+00:00"}])
+    repo = SupabaseSightingsRepository(client, place_id=42)
+
+    epoch = repo.get_epoch()
+
+    assert epoch == datetime(2026, 7, 1, 0, 0, 0, tzinfo=timezone.utc)
+    assert ("order", ("first_seen",), {}) in client.query.calls
+    assert ("limit", (1,), {}) in client.query.calls
 
 
 def test_upsert_sightings_sends_rows_with_on_conflict_place_id_job_id():
     client = FakeSupabaseClient()
     repo = SupabaseSightingsRepository(client, place_id=42)
     sightings = [
-        ServerSighting(job_id="job-1", first_seen=T0 - timedelta(hours=1), last_seen=T0, playing=3, max_players=8)
+        ServerSighting(
+            job_id="job-1",
+            first_seen=T0 - timedelta(hours=1),
+            first_seen_playing=2,
+            last_seen=T0,
+            playing=3,
+            max_players=8,
+        )
     ]
 
     repo.upsert_sightings(sightings)
@@ -88,6 +125,7 @@ def test_upsert_sightings_sends_rows_with_on_conflict_place_id_job_id():
             "place_id": 42,
             "job_id": "job-1",
             "first_seen": (T0 - timedelta(hours=1)).isoformat(),
+            "first_seen_playing": 2,
             "last_seen": T0.isoformat(),
             "playing": 3,
             "max_players": 8,
