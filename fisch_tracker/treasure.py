@@ -85,7 +85,9 @@ def rank_upcoming_spawns(
     for sighting in sightings:
         if not (
             sighting.age_confirmed
-            or is_age_reliable(sighting.first_seen, sighting.first_seen_playing, epoch, now, playing_threshold)
+            or is_age_reliable(
+                sighting.first_seen, sighting.first_seen_playing, sighting.playing, epoch, now, playing_threshold
+            )
         ):
             continue
         effective_recency_threshold = (

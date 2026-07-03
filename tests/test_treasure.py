@@ -72,7 +72,7 @@ def test_negative_age_rejected():
 # -- rank_upcoming_spawns --
 
 
-def _sighting(job_id, first_seen, first_seen_playing=1, last_seen=None, playing=1, max_players=20, age_confirmed=False):
+def _sighting(job_id, first_seen, first_seen_playing=1, last_seen=None, playing=3, max_players=20, age_confirmed=False):
     return ServerSighting(
         job_id=job_id,
         first_seen=first_seen,
@@ -100,6 +100,26 @@ def test_rank_excludes_servers_discovered_with_high_playing():
     now = EPOCH + timedelta(hours=5)
     sightings = [
         _sighting("job-late-discovery", first_seen=EPOCH + timedelta(minutes=10), first_seen_playing=9, last_seen=now),
+    ]
+
+    ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now)
+
+    assert ranked == []
+
+
+def test_rank_excludes_unconfirmed_server_whose_population_never_grew():
+    # chronically idle old server: low playing count then and now, no
+    # growth -- indistinguishable from a real new server by snapshot
+    # alone, but a real new server should show growth.
+    now = EPOCH + timedelta(hours=5)
+    sightings = [
+        _sighting(
+            "job-idle-not-new",
+            first_seen=EPOCH + timedelta(minutes=10),
+            first_seen_playing=1,
+            playing=1,
+            last_seen=now,
+        ),
     ]
 
     ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now)

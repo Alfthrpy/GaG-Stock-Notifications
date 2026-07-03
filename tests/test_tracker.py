@@ -133,11 +133,12 @@ def test_record_sightings_queries_repository_and_persists_result():
 # -- reliability gate --
 
 
-def test_is_age_reliable_true_when_discovered_after_epoch_low_playing_and_confirmed():
+def test_is_age_reliable_true_when_discovered_after_epoch_low_playing_confirmed_and_grown():
     first_seen = EPOCH + timedelta(seconds=1)
     assert is_age_reliable(
         first_seen=first_seen,
-        first_seen_playing=2,
+        first_seen_playing=1,
+        current_playing=4,
         epoch=EPOCH,
         now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS),
         playing_threshold=2,
@@ -148,6 +149,7 @@ def test_is_age_reliable_false_when_discovered_in_epoch_sweep():
     assert is_age_reliable(
         first_seen=EPOCH,
         first_seen_playing=1,
+        current_playing=4,
         epoch=EPOCH,
         now=EPOCH + timedelta(hours=5),
         playing_threshold=2,
@@ -162,6 +164,7 @@ def test_is_age_reliable_false_when_first_sighting_playing_exceeds_threshold():
     assert is_age_reliable(
         first_seen=first_seen,
         first_seen_playing=8,
+        current_playing=12,
         epoch=EPOCH,
         now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS),
         playing_threshold=2,
@@ -178,6 +181,7 @@ def test_is_age_reliable_false_when_not_survived_confirmation_window_yet():
     assert is_age_reliable(
         first_seen=first_seen,
         first_seen_playing=1,
+        current_playing=3,
         epoch=EPOCH,
         now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS - 1),
         playing_threshold=2,
@@ -189,6 +193,7 @@ def test_is_age_reliable_true_right_at_confirmation_window_boundary():
     assert is_age_reliable(
         first_seen=first_seen,
         first_seen_playing=1,
+        current_playing=3,
         epoch=EPOCH,
         now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS),
         playing_threshold=2,
@@ -202,15 +207,47 @@ def test_is_age_reliable_uses_default_thresholds_when_not_given():
     assert is_age_reliable(
         first_seen=first_seen,
         first_seen_playing=DEFAULT_RELIABILITY_PLAYING_THRESHOLD + 1,
+        current_playing=DEFAULT_RELIABILITY_PLAYING_THRESHOLD + 5,
         epoch=EPOCH,
         now=confirmed_now,
     ) is False
     assert is_age_reliable(
         first_seen=first_seen,
         first_seen_playing=DEFAULT_RELIABILITY_PLAYING_THRESHOLD,
+        current_playing=DEFAULT_RELIABILITY_PLAYING_THRESHOLD + 3,
         epoch=EPOCH,
         now=confirmed_now,
     ) is True
+
+
+# -- growth-trend check: static low playing count alone isn't evidence of
+# youth (confirmed live -- many old servers sit at 1-5 players for hours),
+# but a real new server should show net growth as matchmaking fills it --
+
+
+def test_is_age_reliable_false_when_population_never_grew_since_discovery():
+    # chronically-idle old server: low then, still low now, no growth
+    first_seen = EPOCH + timedelta(hours=5)
+    assert is_age_reliable(
+        first_seen=first_seen,
+        first_seen_playing=1,
+        current_playing=1,
+        epoch=EPOCH,
+        now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS),
+        playing_threshold=2,
+    ) is False
+
+
+def test_is_age_reliable_false_when_population_declined_since_discovery():
+    first_seen = EPOCH + timedelta(hours=5)
+    assert is_age_reliable(
+        first_seen=first_seen,
+        first_seen_playing=2,
+        current_playing=0,
+        epoch=EPOCH,
+        now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS),
+        playing_threshold=2,
+    ) is False
 
 
 # -- manual age confirmation (ground truth reported from Fisch's in-game UI) --

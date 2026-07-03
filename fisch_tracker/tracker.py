@@ -14,14 +14,17 @@ partially covers:
    see (~700-server API cap vs thousands of concurrent servers), so a
    server can stay outside our sample for a long time and only get
    caught once it happens to land on the pages we fetch.
-3. Playing count at first sighting turned out NOT to reliably signal
-   "just born" -- confirmed by live observation, many servers sit at
-   just 1-5 players for hours regardless of true age (Fisch's
+3. A static playing count at first sighting turned out NOT to reliably
+   signal "just born" -- confirmed by live observation, many servers
+   sit at just 1-5 players for hours regardless of true age (Fisch's
    population is thin enough that low occupancy is normal, not a sign
-   of youth or impending closure). The playing-count/confirmation-
-   window heuristic in is_age_reliable() is therefore a soft, ranked
-   guess, not a source of truth -- callers should treat it as a lower
-   tier than a manual confirmation.
+   of youth or impending closure). What does distinguish them: growth.
+   A genuinely new server keeps getting filled as matchmaking directs
+   players to it, while a chronically idle or dying one stays flat or
+   declines. is_age_reliable() therefore also requires the latest known
+   playing count to be higher than it was at first sighting. This is
+   still a soft, ranked guess, not a source of truth -- callers should
+   treat it as a lower tier than a manual confirmation.
 
 Manual confirmation (compute_confirmed_first_seen / apply_age_confirmation)
 is the ground-truth override: Fisch's own UI shows a server's real age,
@@ -99,6 +102,7 @@ def compute_age_seconds(first_seen: datetime, now: datetime) -> float:
 def is_age_reliable(
     first_seen: datetime,
     first_seen_playing: int,
+    current_playing: int,
     epoch: datetime,
     now: datetime,
     playing_threshold: int = DEFAULT_RELIABILITY_PLAYING_THRESHOLD,
@@ -108,6 +112,7 @@ def is_age_reliable(
         first_seen > epoch
         and first_seen_playing <= playing_threshold
         and (now - first_seen).total_seconds() >= min_confirmation_seconds
+        and current_playing > first_seen_playing
     )
 
 
