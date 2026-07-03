@@ -1,5 +1,5 @@
 aiohttp==3.12.13
 tenacity==9.1.2
-supabase==2.15.3
+supabase==2.31.0
 pytest==8.4.0
 pytest-mock==3.14.1
