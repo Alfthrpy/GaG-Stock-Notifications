@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
 
@@ -39,6 +40,14 @@ DEEP_SWEEP_EVERY_N_TICKS = 5
 # the rate limiter is what actually paces real requests.
 MIN_TICK_GAP_SECONDS = 1
 
+# The sightings table never deletes rows on its own (a closed server just
+# stops getting last_seen refreshed), so it grows unbounded -- e.g. ~1300
+# rows accumulated in under 2 hours during live testing. Periodically prune
+# rows that have been dead far longer than anything still useful to us
+# (confirmed servers only get a 6h recency grace period -- see treasure.py).
+CLEANUP_EVERY_N_TICKS = 200
+CLEANUP_RETENTION_DAYS = 3
+
 
 def pages_for_tick(
     tick_number: int,
@@ -50,6 +59,10 @@ def pages_for_tick(
     if tick_number % deep_sweep_every == 0:
         return deep_pages
     return shallow_pages
+
+
+def should_run_cleanup(tick_number: int, every: int = CLEANUP_EVERY_N_TICKS) -> bool:
+    return tick_number % every == 0
 
 
 async def run_forever() -> None:
@@ -73,6 +86,15 @@ async def run_forever() -> None:
                 )
             except Exception:
                 logger.exception("sweep failed on tick %d", tick)
+
+            if should_run_cleanup(tick):
+                try:
+                    cutoff = datetime.now(timezone.utc) - timedelta(days=CLEANUP_RETENTION_DAYS)
+                    repository.delete_stale_sightings(older_than=cutoff)
+                    logger.info("tick %d: cleaned up sightings older than %s", tick, cutoff.isoformat())
+                except Exception:
+                    logger.exception("cleanup failed on tick %d", tick)
+
             tick += 1
             await asyncio.sleep(MIN_TICK_GAP_SECONDS)
 

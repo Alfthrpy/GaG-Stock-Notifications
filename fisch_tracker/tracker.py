@@ -79,12 +79,20 @@ class SightingsRepository(Protocol):
         or None if nothing has been recorded yet."""
         ...
 
-    def list_sightings(self) -> list[ServerSighting]:
-        """Return every currently-stored sighting for this place."""
+    def list_sightings(self, since: datetime | None = None) -> list[ServerSighting]:
+        """Return stored sightings for this place. If since is given, only
+        rows with last_seen >= since -- the table grows unbounded (rows
+        are never deleted except by delete_stale_sightings), so callers
+        that only care about currently-relevant servers should always
+        pass since to avoid pulling the entire history every call."""
         ...
 
     def upsert_sightings(self, sightings: list[ServerSighting]) -> None:
         """Persist sightings. Must not move a job's first_seen/first_seen_playing."""
+        ...
+
+    def delete_stale_sightings(self, older_than: datetime) -> None:
+        """Delete rows with last_seen < older_than, to bound table growth."""
         ...
 
     def confirm_age(self, job_id: str, first_seen: datetime, confirmed_at: datetime) -> None:

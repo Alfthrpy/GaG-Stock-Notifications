@@ -41,8 +41,11 @@ class SupabaseSightingsRepository:
             for row in response.data
         }
 
-    def list_sightings(self) -> list[ServerSighting]:
-        response = self._client.table(TABLE).select("*").eq("place_id", self._place_id).execute()
+    def list_sightings(self, since: datetime | None = None) -> list[ServerSighting]:
+        query = self._client.table(TABLE).select("*").eq("place_id", self._place_id)
+        if since is not None:
+            query = query.gte("last_seen", since.isoformat())
+        response = query.execute()
         return [
             ServerSighting(
                 job_id=row["job_id"],
@@ -96,3 +99,12 @@ class SupabaseSightingsRepository:
             "age_confirmed": True,
         }
         self._client.table(TABLE).upsert(row, on_conflict="place_id,job_id", default_to_null=False).execute()
+
+    def delete_stale_sightings(self, older_than: datetime) -> None:
+        (
+            self._client.table(TABLE)
+            .delete()
+            .eq("place_id", self._place_id)
+            .lt("last_seen", older_than.isoformat())
+            .execute()
+        )

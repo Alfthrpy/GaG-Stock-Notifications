@@ -42,6 +42,18 @@ class FakeQuery:
         self.calls.append(("upsert", args, kwargs))
         return self
 
+    def gte(self, *args, **kwargs):
+        self.calls.append(("gte", args, kwargs))
+        return self
+
+    def lt(self, *args, **kwargs):
+        self.calls.append(("lt", args, kwargs))
+        return self
+
+    def delete(self, *args, **kwargs):
+        self.calls.append(("delete", args, kwargs))
+        return self
+
     def execute(self):
         return FakeExecuteResult(self._data)
 
@@ -142,6 +154,30 @@ def test_list_sightings_parses_rows_into_server_sighting():
     ]
     assert client.table_names == ["fisch_server_sightings"]
     assert ("eq", ("place_id", 42), {}) in client.query.calls
+    assert not any(c[0] == "gte" for c in client.query.calls)
+
+
+def test_list_sightings_filters_by_since_when_given():
+    client = FakeSupabaseClient(data=[])
+    repo = SupabaseSightingsRepository(client, place_id=42)
+
+    since = datetime(2026, 7, 3, 6, 0, 0, tzinfo=timezone.utc)
+    repo.list_sightings(since=since)
+
+    assert ("gte", ("last_seen", since.isoformat()), {}) in client.query.calls
+
+
+def test_delete_stale_sightings_deletes_rows_older_than_given_time():
+    client = FakeSupabaseClient(data=[])
+    repo = SupabaseSightingsRepository(client, place_id=42)
+
+    older_than = datetime(2026, 6, 30, 0, 0, 0, tzinfo=timezone.utc)
+    repo.delete_stale_sightings(older_than=older_than)
+
+    assert client.table_names == ["fisch_server_sightings"]
+    assert ("delete", (), {}) in client.query.calls
+    assert ("eq", ("place_id", 42), {}) in client.query.calls
+    assert ("lt", ("last_seen", older_than.isoformat()), {}) in client.query.calls
 
 
 def test_upsert_sightings_sends_rows_with_on_conflict_place_id_job_id():

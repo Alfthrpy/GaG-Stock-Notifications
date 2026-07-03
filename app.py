@@ -11,7 +11,7 @@ import asyncio
 import logging
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import gradio as gr
 from gradio_modal import Modal
@@ -29,6 +29,10 @@ TABLE_HEADERS = ["Job ID", "Players", "Umur Server", "Status Spawn", "Status Umu
 TABLE_DATATYPES = ["str", "str", "str", "str", "str", "markdown"]
 MAX_ROWS_SHOWN = 30
 REFRESH_SECONDS = 15
+# Generous buffer over the 6h confirmed-recency window (treasure.py) so we
+# never fetch stale/dead rows -- the sightings table keeps every row ever
+# seen (nothing gets deleted except by the periodic cleanup in main.py).
+DASHBOARD_LOOKBACK_HOURS = 24
 JOIN_DEEP_LINK = "roblox://experiences/start?placeId={place_id}&gameInstanceId={job_id}"
 JOIN_COLUMN_INDEX = TABLE_HEADERS.index("Join")
 
@@ -75,8 +79,8 @@ def build_dashboard_rows(filter_choice: str = FILTER_ALL) -> list[list[str]]:
         if epoch is None:
             return [["-", "-", "-", "Belum ada data, menunggu sweep pertama...", "-", ""]]
 
-        sightings = repository.list_sightings()
         now = datetime.now(timezone.utc)
+        sightings = repository.list_sightings(since=now - timedelta(hours=DASHBOARD_LOOKBACK_HOURS))
         ranked = rank_upcoming_spawns(sightings, epoch=epoch, now=now)
         if filter_choice == FILTER_CONFIRMED_ONLY:
             ranked = [p for p in ranked if p.is_confirmed]
