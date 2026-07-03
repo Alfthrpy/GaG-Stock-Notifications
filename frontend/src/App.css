@@ -1,0 +1,253 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #666666;
+  --border: #e2e2e2;
+  --row-hover: #f6f6f6;
+  --confirmed-bg: #d7f5dd;
+  --confirmed-fg: #1a6b2c;
+  --guessed-bg: #efe6ff;
+  --guessed-fg: #5b3aa8;
+  --accent: #4f46e5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14141a;
+    --fg: #ececec;
+    --muted: #9a9a9a;
+    --border: #2c2c34;
+    --row-hover: #1d1d24;
+    --confirmed-bg: #123a1f;
+    --confirmed-fg: #7be495;
+    --guessed-bg: #2c1f4d;
+    --guessed-fg: #c4b0f0;
+    --accent: #8481ff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+header h1 {
+  font-size: 1.6rem;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 70ch;
+}
+
+.ws-status {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+
+.ws-status-ok {
+  color: #2ea043;
+}
+
+.ws-status-down {
+  color: #d1242f;
+}
+
+.filter-toggle {
+  display: flex;
+  gap: 16px;
+  margin: 20px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  width: fit-content;
+}
+
+.filter-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.empty-state {
+  color: var(--muted);
+  padding: 32px 0;
+}
+
+.server-table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow-x: auto;
+  display: block;
+}
+
+.server-table thead,
+.server-table tbody {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.server-table th,
+.server-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.server-table tbody tr {
+  cursor: pointer;
+}
+
+.server-table tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.job-id-cell {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.badge-confirmed {
+  background: var(--confirmed-bg);
+  color: var(--confirmed-fg);
+}
+
+.badge-guessed {
+  background: var(--guessed-bg);
+  color: var(--guessed-fg);
+}
+
+.join-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.join-link:hover {
+  text-decoration: underline;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  flex: 1;
+}
+
+.modal-field input {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
+.modal-row {
+  display: flex;
+  gap: 12px;
+}
+
+.modal-submit {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.modal-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.modal-result {
+  margin-top: 12px;
+  font-size: 0.85rem;
+}
+
+.modal-result-ok {
+  color: #2ea043;
+}
+
+.modal-result-error {
+  color: #d1242f;
+}
