@@ -3,21 +3,44 @@
 Roblox never exposes a server's creation time, so this module only
 handles fetching the live list of public servers for a place. Age
 estimation (via first-seen tracking) lives in `tracker.py`.
+
+Two undocumented constraints observed live against this endpoint:
+- Rate limit: `x-ratelimit-limit: 3, 3;w=60` (~3 requests/60s sliding
+  window), signaled via x-ratelimit-remaining/x-ratelimit-reset
+  response headers. See rate_limiter.AdaptiveRateLimiter, which reads
+  these headers instead of hardcoding the number.
+- Hard population cap: cursor pagination stops (nextPageCursor: null)
+  after ~700 servers (7 pages of 100), even when more servers exist.
+  max_pages defaults just above that cap.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from .rate_limiter import AdaptiveRateLimiter, parse_rate_limit_headers
+
 SERVERS_URL = "https://games.roblox.com/v1/games/{place_id}/servers/Public"
+
+# Observed hard cap is ~700 servers / 7 pages; a small buffer above that
+# is enough since the API refuses to paginate further regardless.
+DEFAULT_MAX_PAGES = 10
+
+_DEFAULT_RETRY_AFTER_SECONDS = 65.0
 
 
 class RobloxApiError(Exception):
     def __init__(self, status: int, body: str):
         super().__init__(f"Roblox API returned status {status}: {body}")
         self.status = status
+
+
+class RobloxRateLimitedError(RobloxApiError):
+    def __init__(self, status: int, body: str, retry_after: float):
+        super().__init__(status, body)
+        self.retry_after = retry_after
 
 
 @dataclass(frozen=True)
@@ -39,22 +62,69 @@ def _parse_server(raw: dict[str, Any]) -> ServerInstance:
     )
 
 
+def _header_get(headers: Mapping[str, str], name: str) -> str | None:
+    if name in headers:
+        return headers[name]
+    lower = name.lower()
+    for key, value in headers.items():
+        if key.lower() == lower:
+            return value
+    return None
+
+
+def _parse_retry_after(headers: Mapping[str, str]) -> float:
+    raw = _header_get(headers, "Retry-After")
+    if raw is not None:
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+
+    status = parse_rate_limit_headers(headers)
+    if status is not None:
+        return status.reset_seconds
+
+    return _DEFAULT_RETRY_AFTER_SECONDS
+
+
+def _wait_strategy(retry_state):
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    if isinstance(exc, RobloxRateLimitedError):
+        return exc.retry_after
+    return wait_exponential(multiplier=0.5, max=8)(retry_state)
+
+
 @retry(
     retry=retry_if_exception_type((RobloxApiError, ConnectionError, TimeoutError)),
     stop=stop_after_attempt(4),
-    wait=wait_exponential(multiplier=0.5, max=8),
+    wait=_wait_strategy,
     reraise=True,
 )
 async def fetch_servers_page(
-    session: Any, place_id: int, cursor: str | None = None, limit: int = 100
+    session: Any,
+    place_id: int,
+    cursor: str | None = None,
+    limit: int = 100,
+    rate_limiter: AdaptiveRateLimiter | None = None,
 ) -> tuple[list[ServerInstance], str | None]:
     """Fetch a single page of public servers. Returns (servers, next_cursor)."""
+    if rate_limiter is not None:
+        await rate_limiter.wait()
+
     url = SERVERS_URL.format(place_id=place_id)
     params: dict[str, Any] = {"sortOrder": "Asc", "limit": limit}
     if cursor:
         params["cursor"] = cursor
 
     async with session.get(url, params=params) as resp:
+        headers = getattr(resp, "headers", {})
+        if rate_limiter is not None:
+            rate_limiter.update(headers)
+            rate_limiter.record_request()
+
+        if resp.status == 429:
+            body = await resp.text()
+            raise RobloxRateLimitedError(resp.status, body, _parse_retry_after(headers))
         if resp.status != 200:
             body = await resp.text()
             raise RobloxApiError(resp.status, body)
@@ -66,9 +136,15 @@ async def fetch_servers_page(
 
 
 async def fetch_all_public_servers(
-    session: Any, place_id: int, limit: int = 100, max_pages: int = 500
+    session: Any,
+    place_id: int,
+    rate_limiter: AdaptiveRateLimiter | None = None,
+    limit: int = 100,
+    max_pages: int = DEFAULT_MAX_PAGES,
 ) -> list[ServerInstance]:
-    """Walk the full cursor chain and return every public server instance.
+    """Walk the cursor chain and return every public server instance seen
+    (bounded by max_pages, since Roblox caps pagination around 700
+    servers / 7 pages anyway).
 
     Cursor pagination is inherently sequential (each page's cursor is only
     known after the previous page's response), so pages cannot be fetched
@@ -78,7 +154,9 @@ async def fetch_all_public_servers(
     cursor: str | None = None
 
     for _ in range(max_pages):
-        page_servers, cursor = await fetch_servers_page(session, place_id, cursor=cursor, limit=limit)
+        page_servers, cursor = await fetch_servers_page(
+            session, place_id, cursor=cursor, limit=limit, rate_limiter=rate_limiter
+        )
         servers.extend(page_servers)
         if not cursor:
             break

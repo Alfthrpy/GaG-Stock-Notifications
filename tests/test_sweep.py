@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from tests.test_roblox_api import FakeResponse, FakeSession
+from tests.test_roblox_api import FakeRateLimiter, FakeResponse, FakeSession
 
 from fisch_tracker.sweep import run_sweep
 from fisch_tracker.tracker import ServerSighting
@@ -49,3 +49,26 @@ def test_run_sweep_reports_duration():
     assert result.server_count == 0
     assert result.duration_seconds >= 0
     assert result.finished_at >= result.started_at
+
+
+def test_run_sweep_respects_max_pages():
+    page = {"data": [{"id": "job-x", "playing": 1, "maxPlayers": 8}], "nextPageCursor": "keeps-going"}
+    session = FakeSession([FakeResponse(200, page)] * 2)
+    repo = FakeRepository()
+
+    result = asyncio.run(run_sweep(session, repo, place_id=999, max_pages=2))
+
+    assert result.server_count == 2
+    assert len(session.calls) == 2
+
+
+def test_run_sweep_passes_rate_limiter_through():
+    page = {"data": [], "nextPageCursor": None}
+    session = FakeSession([FakeResponse(200, page)])
+    repo = FakeRepository()
+    limiter = FakeRateLimiter()
+
+    asyncio.run(run_sweep(session, repo, place_id=999, rate_limiter=limiter))
+
+    assert limiter.waited is True
+    assert limiter.recorded is True
