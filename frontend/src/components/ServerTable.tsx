@@ -5,20 +5,30 @@ import type { ServerPrediction } from "../types";
 interface RowProps {
   server: ServerPrediction;
   elapsedSeconds: number;
+  isJoined: boolean;
   onRowClick: (jobId: string) => void;
+  onJoinClick: (jobId: string) => void;
 }
 
-const ServerRow = memo(function ServerRow({ server, elapsedSeconds, onRowClick }: RowProps) {
+const ServerRow = memo(function ServerRow({ server, elapsedSeconds, isJoined, onRowClick, onJoinClick }: RowProps) {
   const liveAge = server.age_seconds + elapsedSeconds;
   const liveUntilStart = Math.max(0, server.seconds_until_start - elapsedSeconds);
   const liveUntilEnd = Math.max(0, server.seconds_until_end - elapsedSeconds);
 
+  const rowClasses = [server.is_active ? "row-active" : "", isJoined ? "row-joined" : ""]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <tr
-      className={server.is_active ? "row-active" : undefined}
-      onClick={() => onRowClick(server.job_id)}
-    >
-      <td className="job-id-cell">{server.job_id}</td>
+    <tr className={rowClasses || undefined} onClick={() => onRowClick(server.job_id)}>
+      <td className="job-id-cell">
+        {isJoined && (
+          <span className="joined-marker" title="Server yang lo klik Join">
+            📍{" "}
+          </span>
+        )}
+        {server.job_id}
+      </td>
       <td className="num-cell">
         {server.playing}/{server.max_players}
       </td>
@@ -34,7 +44,14 @@ const ServerRow = memo(function ServerRow({ server, elapsedSeconds, onRowClick }
         </span>
       </td>
       <td>
-        <a href={server.join_link} className="join-link" onClick={(event) => event.stopPropagation()}>
+        <a
+          href={server.join_link}
+          className="join-link"
+          onClick={(event) => {
+            event.stopPropagation();
+            onJoinClick(server.job_id);
+          }}
+        >
           🎮 Join
         </a>
       </td>
@@ -45,10 +62,12 @@ const ServerRow = memo(function ServerRow({ server, elapsedSeconds, onRowClick }
 interface Props {
   servers: ServerPrediction[];
   elapsedSeconds: number;
+  joinedIds: Set<string>;
   onRowClick: (jobId: string) => void;
+  onJoinClick: (jobId: string) => void;
 }
 
-export function ServerTable({ servers, elapsedSeconds, onRowClick }: Props) {
+export function ServerTable({ servers, elapsedSeconds, joinedIds, onRowClick, onJoinClick }: Props) {
   if (servers.length === 0) {
     return <p className="empty-state">Belum ada server yang reliable, coba lagi nanti.</p>;
   }
@@ -68,7 +87,14 @@ export function ServerTable({ servers, elapsedSeconds, onRowClick }: Props) {
         </thead>
         <tbody>
           {servers.map((server) => (
-            <ServerRow key={server.job_id} server={server} elapsedSeconds={elapsedSeconds} onRowClick={onRowClick} />
+            <ServerRow
+              key={server.job_id}
+              server={server}
+              elapsedSeconds={elapsedSeconds}
+              isJoined={joinedIds.has(server.job_id)}
+              onRowClick={onRowClick}
+              onJoinClick={onJoinClick}
+            />
           ))}
         </tbody>
       </table>

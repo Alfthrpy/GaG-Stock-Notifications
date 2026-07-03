@@ -145,6 +145,21 @@ header h1 {
   color: white;
 }
 
+.clear-joined-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.clear-joined-btn:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
 .empty-state {
   color: var(--muted);
   padding: 32px 0;
@@ -211,6 +226,15 @@ header h1 {
 .server-table tbody tr.row-active:hover {
   background: var(--good-wash);
   filter: brightness(0.97);
+}
+
+.server-table tbody tr.row-joined {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.joined-marker {
+  filter: saturate(1.4);
 }
 
 .num-cell {

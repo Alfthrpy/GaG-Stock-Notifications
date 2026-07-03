@@ -5,6 +5,7 @@ import { Pagination } from "./components/Pagination";
 import { ServerTable } from "./components/ServerTable";
 import { StatsBar } from "./components/StatsBar";
 import { WS_URL } from "./config";
+import { useJoinedServers } from "./hooks/useJoinedServers";
 import { useNow } from "./hooks/useNow";
 import { useServerFeed } from "./hooks/useServerFeed";
 import "./App.css";
@@ -17,6 +18,7 @@ function App() {
   const [filter, setFilter] = useState<FilterChoice>("all");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const { joinedIds, markJoined, clearJoined } = useJoinedServers();
 
   const elapsedSeconds = snapshot ? (now - snapshot.receivedAt) / 1000 : 0;
 
@@ -69,6 +71,11 @@ function App() {
 
       <div className="toolbar">
         <FilterToggle value={filter} onChange={setFilter} />
+        {joinedIds.size > 0 && (
+          <button type="button" className="clear-joined-btn" onClick={clearJoined}>
+            Hapus tanda 📍 ({joinedIds.size})
+          </button>
+        )}
       </div>
 
       {!snapshot ? (
@@ -77,7 +84,13 @@ function App() {
         <p className="empty-state">Belum ada data, menunggu sweep pertama...</p>
       ) : (
         <>
-          <ServerTable servers={pagedServers} elapsedSeconds={elapsedSeconds} onRowClick={setSelectedJobId} />
+          <ServerTable
+            servers={pagedServers}
+            elapsedSeconds={elapsedSeconds}
+            joinedIds={joinedIds}
+            onRowClick={setSelectedJobId}
+            onJoinClick={markJoined}
+          />
           <Pagination
             page={page}
             pageCount={pageCount}
