@@ -23,9 +23,11 @@ from fisch_tracker.treasure import PredictedSpawn, rank_upcoming_spawns
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fisch_tracker.app")
 
-TABLE_HEADERS = ["Job ID", "Players", "Umur Server", "Status Spawn"]
+TABLE_HEADERS = ["Job ID", "Players", "Umur Server", "Status Spawn", "Join"]
+TABLE_DATATYPES = ["str", "str", "str", "str", "markdown"]
 MAX_ROWS_SHOWN = 30
 REFRESH_SECONDS = 15
+JOIN_DEEP_LINK = "roblox://experiences/start?placeId={place_id}&gameInstanceId={job_id}"
 
 
 def _start_background_worker() -> None:
@@ -44,13 +46,15 @@ def _format_countdown(seconds: float) -> str:
     return f"{minutes}m {secs}s"
 
 
-def _format_row(prediction: PredictedSpawn) -> list[str]:
+def _format_row(prediction: PredictedSpawn, place_id: int) -> list[str]:
     status = f"AKTIF ({_format_countdown(prediction.seconds_until_end)} lagi tutup)" if prediction.is_active else f"{_format_countdown(prediction.seconds_until_start)} lagi"
+    join_link = JOIN_DEEP_LINK.format(place_id=place_id, job_id=prediction.job_id)
     return [
         prediction.job_id,
         f"{prediction.playing}/{prediction.max_players}",
         _format_countdown(prediction.age_seconds),
         status,
+        f"[🎮 Join]({join_link})",
     ]
 
 
@@ -60,18 +64,18 @@ def build_dashboard_rows() -> list[list[str]]:
         repository = SupabaseSightingsRepository(get_supabase_client(), place_id)
         epoch = repository.get_epoch()
         if epoch is None:
-            return [["-", "-", "-", "Belum ada data, menunggu sweep pertama..."]]
+            return [["-", "-", "-", "Belum ada data, menunggu sweep pertama...", ""]]
 
         sightings = repository.list_sightings()
         now = datetime.now(timezone.utc)
         ranked = rank_upcoming_spawns(sightings, epoch=epoch, now=now)
         if not ranked:
-            return [["-", "-", "-", "Belum ada server yang reliable, coba lagi nanti"]]
+            return [["-", "-", "-", "Belum ada server yang reliable, coba lagi nanti", ""]]
 
-        return [_format_row(p) for p in ranked[:MAX_ROWS_SHOWN]]
+        return [_format_row(p, place_id) for p in ranked[:MAX_ROWS_SHOWN]]
     except Exception:
         logger.exception("failed to build dashboard")
-        return [["-", "-", "-", "Error ambil data, cek log"]]
+        return [["-", "-", "-", "Error ambil data, cek log", ""]]
 
 
 _start_background_worker()
@@ -81,9 +85,15 @@ with gr.Blocks(title="Fisch Sunken Treasure Tracker") as demo:
     gr.Markdown(
         "Server diurutkan berdasarkan seberapa dekat window Sunken Treasure "
         "(aktif duluan, lalu yang paling deket mulai). Cuma server dengan "
-        "estimasi umur yang reliable yang ditampilkan."
+        "estimasi umur yang reliable yang ditampilkan. Klik **Join** buat "
+        "langsung masuk ke server itu (perlu Roblox client ter-install)."
     )
-    gr.Dataframe(headers=TABLE_HEADERS, value=build_dashboard_rows, every=REFRESH_SECONDS)
+    gr.Dataframe(
+        headers=TABLE_HEADERS,
+        datatype=TABLE_DATATYPES,
+        value=build_dashboard_rows,
+        every=REFRESH_SECONDS,
+    )
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)))
