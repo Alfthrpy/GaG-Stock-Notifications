@@ -245,3 +245,24 @@ def test_rank_includes_age_confirmed_server_even_if_first_seen_predates_epoch():
 
     assert len(ranked) == 1
     assert ranked[0].is_confirmed is True
+
+
+def test_rank_always_puts_confirmed_servers_before_unconfirmed_regardless_of_urgency():
+    now = EPOCH + timedelta(hours=5)
+
+    def age_for(job_id, seconds_old, confirmed):
+        return _sighting(job_id, first_seen=now - timedelta(seconds=seconds_old), last_seen=now, age_confirmed=confirmed)
+
+    sightings = [
+        age_for("job-unconfirmed-urgent", 3590, confirmed=False),  # 10s until first spawn -- most urgent overall
+        age_for("job-confirmed-not-urgent", 100, confirmed=True),  # 3500s until first spawn -- least urgent overall
+        age_for("job-confirmed-urgent", 3595, confirmed=True),  # 5s until first spawn -- most urgent among confirmed
+    ]
+
+    ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now)
+
+    assert [p.job_id for p in ranked] == [
+        "job-confirmed-urgent",
+        "job-confirmed-not-urgent",
+        "job-unconfirmed-urgent",
+    ]

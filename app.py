@@ -63,7 +63,11 @@ def _format_row(prediction: PredictedSpawn, place_id: int) -> list[str]:
     ]
 
 
-def build_dashboard_rows() -> list[list[str]]:
+FILTER_ALL = "Semua"
+FILTER_CONFIRMED_ONLY = "Cuma Terkonfirmasi"
+
+
+def build_dashboard_rows(filter_choice: str = FILTER_ALL) -> list[list[str]]:
     try:
         place_id = get_place_id()
         repository = SupabaseSightingsRepository(get_supabase_client(), place_id)
@@ -74,8 +78,15 @@ def build_dashboard_rows() -> list[list[str]]:
         sightings = repository.list_sightings()
         now = datetime.now(timezone.utc)
         ranked = rank_upcoming_spawns(sightings, epoch=epoch, now=now)
+        if filter_choice == FILTER_CONFIRMED_ONLY:
+            ranked = [p for p in ranked if p.is_confirmed]
         if not ranked:
-            return [["-", "-", "-", "Belum ada server yang reliable, coba lagi nanti", "-", ""]]
+            message = (
+                "Belum ada server yang terkonfirmasi"
+                if filter_choice == FILTER_CONFIRMED_ONLY
+                else "Belum ada server yang reliable, coba lagi nanti"
+            )
+            return [["-", "-", "-", message, "-", ""]]
 
         return [_format_row(p, place_id) for p in ranked[:MAX_ROWS_SHOWN]]
     except Exception:
@@ -114,8 +125,8 @@ def report_age(job_id: str, days: float, hours: float, minutes: float) -> tuple[
     )
 
 
-def refresh_dashboard() -> tuple[list[list[str]], list[list[str]]]:
-    rows = build_dashboard_rows()
+def refresh_dashboard(filter_choice: str) -> tuple[list[list[str]], list[list[str]]]:
+    rows = build_dashboard_rows(filter_choice)
     return rows, rows
 
 
@@ -143,6 +154,7 @@ with gr.Blocks(title="Fisch Sunken Treasure Tracker") as demo:
         "ke server itu, atau klik baris mana aja buat lapor umur asli yang "
         "lo liat di UI Fisch."
     )
+    filter_radio = gr.Radio(choices=[FILTER_ALL, FILTER_CONFIRMED_ONLY], value=FILTER_ALL, label="Filter")
     row_state = gr.State([])
     table = gr.Dataframe(headers=TABLE_HEADERS, datatype=TABLE_DATATYPES)
 
@@ -156,8 +168,9 @@ with gr.Blocks(title="Fisch Sunken Treasure Tracker") as demo:
         report_button = gr.Button("Kirim Laporan")
         report_output = gr.Textbox(label="Hasil", interactive=False)
 
-    demo.load(fn=refresh_dashboard, outputs=[table, row_state])
-    gr.Timer(REFRESH_SECONDS).tick(fn=refresh_dashboard, outputs=[table, row_state])
+    demo.load(fn=refresh_dashboard, inputs=[filter_radio], outputs=[table, row_state])
+    gr.Timer(REFRESH_SECONDS).tick(fn=refresh_dashboard, inputs=[filter_radio], outputs=[table, row_state])
+    filter_radio.change(fn=refresh_dashboard, inputs=[filter_radio], outputs=[table, row_state])
     table.select(fn=open_report_modal, inputs=[row_state], outputs=[modal_job_id, report_modal])
     report_button.click(
         fn=report_age,

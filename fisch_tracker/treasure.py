@@ -76,11 +76,11 @@ def rank_upcoming_spawns(
     confirmed_recency_threshold_seconds: float = DEFAULT_CONFIRMED_RECENCY_THRESHOLD_SECONDS,
     playing_threshold: int = DEFAULT_RELIABILITY_PLAYING_THRESHOLD,
 ) -> list[PredictedSpawn]:
-    """Servers ranked by treasure-spawn urgency (active first, soonest to
-    end; then upcoming, soonest to start). Includes both age-confirmed
-    (ground truth, ranked_upcoming_spawns trusts these unconditionally)
-    and heuristic-passed (unconfirmed guess) servers -- callers should
-    use PredictedSpawn.is_confirmed to tell them apart."""
+    """Servers ranked with confirmed (ground-truth) sightings always
+    first, then unconfirmed (heuristic guess) ones -- within each group,
+    active servers come before upcoming ones, sorted by urgency (soonest
+    to end / soonest to start). Includes both tiers; callers should use
+    PredictedSpawn.is_confirmed to tell them apart or filter further."""
     predictions = []
     for sighting in sightings:
         if not (
@@ -110,6 +110,10 @@ def rank_upcoming_spawns(
         )
 
     predictions.sort(
-        key=lambda p: (0 if p.is_active else 1, p.seconds_until_end if p.is_active else p.seconds_until_start)
+        key=lambda p: (
+            0 if p.is_confirmed else 1,
+            0 if p.is_active else 1,
+            p.seconds_until_end if p.is_active else p.seconds_until_start,
+        )
     )
     return predictions
