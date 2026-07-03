@@ -7,25 +7,25 @@ interface Props {
 
 export function FilterToggle({ value, onChange }: Props) {
   return (
-    <div className="filter-toggle" role="radiogroup" aria-label="Filter">
-      <label>
-        <input
-          type="radio"
-          name="filter"
-          checked={value === "all"}
-          onChange={() => onChange("all")}
-        />
+    <div className="filter-toggle" role="tablist" aria-label="Filter">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === "all"}
+        className={value === "all" ? "filter-btn filter-btn-active" : "filter-btn"}
+        onClick={() => onChange("all")}
+      >
         Semua
-      </label>
-      <label>
-        <input
-          type="radio"
-          name="filter"
-          checked={value === "confirmed"}
-          onChange={() => onChange("confirmed")}
-        />
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === "confirmed"}
+        className={value === "confirmed" ? "filter-btn filter-btn-active" : "filter-btn"}
+        onClick={() => onChange("confirmed")}
+      >
         Cuma Terkonfirmasi
-      </label>
+      </button>
     </div>
   );
 }

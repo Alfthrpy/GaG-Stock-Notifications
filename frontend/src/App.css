@@ -1,6 +1,7 @@
 :root {
   color-scheme: light dark;
   --bg: #ffffff;
+  --page-bg: #f9f9f7;
   --fg: #1a1a1a;
   --muted: #666666;
   --border: #e2e2e2;
@@ -10,11 +11,15 @@
   --guessed-bg: #efe6ff;
   --guessed-fg: #5b3aa8;
   --accent: #4f46e5;
+  --good: #0ca30c;
+  --good-wash: rgba(12, 163, 12, 0.08);
+  --tile-bg: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #14141a;
+    --page-bg: #0d0d0d;
     --fg: #ececec;
     --muted: #9a9a9a;
     --border: #2c2c34;
@@ -24,6 +29,9 @@
     --guessed-bg: #2c1f4d;
     --guessed-fg: #c4b0f0;
     --accent: #8481ff;
+    --good: #0ca30c;
+    --good-wash: rgba(12, 163, 12, 0.12);
+    --tile-bg: #1a1a1f;
   }
 }
 
@@ -33,7 +41,7 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--page-bg);
   color: var(--fg);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -53,6 +61,7 @@ header h1 {
   color: var(--muted);
   line-height: 1.5;
   max-width: 70ch;
+  font-size: 0.92rem;
 }
 
 .ws-status {
@@ -69,26 +78,82 @@ header h1 {
   color: #d1242f;
 }
 
-.filter-toggle {
+.stats-bar {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
   margin: 20px 0;
+}
+
+.stat-tile {
+  background: var(--tile-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 130px;
+}
+
+.stat-tile-active {
+  border-color: var(--good);
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.stat-tile-active .stat-value {
+  color: var(--good);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0;
+}
+
+.filter-toggle {
+  display: inline-flex;
+  gap: 2px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px 16px;
+  padding: 3px;
   width: fit-content;
 }
 
-.filter-toggle label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.filter-btn {
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
   cursor: pointer;
+}
+
+.filter-btn-active {
+  background: var(--accent);
+  color: white;
 }
 
 .empty-state {
   color: var(--muted);
   padding: 32px 0;
+}
+
+.server-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .server-table {
@@ -105,6 +170,13 @@ header h1 {
   table-layout: fixed;
 }
 
+.server-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
 .server-table th,
 .server-table td {
   text-align: left;
@@ -116,6 +188,13 @@ header h1 {
   text-overflow: ellipsis;
 }
 
+.server-table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
 .server-table tbody tr {
   cursor: pointer;
 }
@@ -124,9 +203,83 @@ header h1 {
   background: var(--row-hover);
 }
 
+.server-table tbody tr.row-active {
+  background: var(--good-wash);
+  box-shadow: inset 3px 0 0 var(--good);
+}
+
+.server-table tbody tr.row-active:hover {
+  background: var(--good-wash);
+  filter: brightness(0.97);
+}
+
+.num-cell {
+  font-variant-numeric: tabular-nums;
+}
+
 .job-id-cell {
   font-family: ui-monospace, monospace;
   font-size: 0.8rem;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pagination-page {
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .server-table thead,
+  .server-table tbody {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .server-table th,
+  .server-table td {
+    white-space: nowrap;
+  }
+
+  .job-id-cell {
+    max-width: 150px;
+    text-overflow: ellipsis;
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
 }
 
 .badge {

@@ -33,10 +33,11 @@ from fisch_tracker.treasure import PredictedSpawn, rank_upcoming_spawns
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fisch_tracker.api")
 
-# Generous buffer over the 6h recency window (treasure.py) so we never
-# fetch rows that could no longer possibly rank, without pulling the
-# sightings table's entire (unbounded) history every request.
-DASHBOARD_LOOKBACK_HOURS = 24
+# treasure.rank_upcoming_spawns never keeps a row past a 6h recency
+# window, so anything older than that can never make the ranked list --
+# fetching it from Supabase (and paginating through it) would be pure
+# waste. Buffer by 1h over that ceiling, not more.
+DASHBOARD_LOOKBACK_HOURS = 7
 BROADCAST_INTERVAL_SECONDS = 5
 JOIN_DEEP_LINK = "roblox://experiences/start?placeId={place_id}&gameInstanceId={job_id}"
 
