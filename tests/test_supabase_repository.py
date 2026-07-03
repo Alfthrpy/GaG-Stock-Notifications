@@ -102,6 +102,37 @@ def test_get_epoch_returns_earliest_first_seen():
     assert ("limit", (1,), {}) in client.query.calls
 
 
+def test_list_sightings_parses_rows_into_server_sighting():
+    client = FakeSupabaseClient(
+        data=[
+            {
+                "job_id": "job-1",
+                "first_seen": "2026-07-03T09:00:00+00:00",
+                "first_seen_playing": 1,
+                "last_seen": "2026-07-03T10:00:00+00:00",
+                "playing": 5,
+                "max_players": 20,
+            }
+        ]
+    )
+    repo = SupabaseSightingsRepository(client, place_id=42)
+
+    result = repo.list_sightings()
+
+    assert result == [
+        ServerSighting(
+            job_id="job-1",
+            first_seen=datetime(2026, 7, 3, 9, 0, 0, tzinfo=timezone.utc),
+            first_seen_playing=1,
+            last_seen=datetime(2026, 7, 3, 10, 0, 0, tzinfo=timezone.utc),
+            playing=5,
+            max_players=20,
+        )
+    ]
+    assert client.table_names == ["fisch_server_sightings"]
+    assert ("eq", ("place_id", 42), {}) in client.query.calls
+
+
 def test_upsert_sightings_sends_rows_with_on_conflict_place_id_job_id():
     client = FakeSupabaseClient()
     repo = SupabaseSightingsRepository(client, place_id=42)

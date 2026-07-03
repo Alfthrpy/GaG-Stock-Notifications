@@ -40,6 +40,20 @@ class SupabaseSightingsRepository:
             for row in response.data
         }
 
+    def list_sightings(self) -> list[ServerSighting]:
+        response = self._client.table(TABLE).select("*").eq("place_id", self._place_id).execute()
+        return [
+            ServerSighting(
+                job_id=row["job_id"],
+                first_seen=_parse_utc(row["first_seen"]),
+                first_seen_playing=row["first_seen_playing"],
+                last_seen=_parse_utc(row["last_seen"]),
+                playing=row["playing"],
+                max_players=row["max_players"],
+            )
+            for row in response.data
+        ]
+
     def get_epoch(self) -> datetime | None:
         response = (
             self._client.table(TABLE)

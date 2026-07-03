@@ -60,6 +60,10 @@ class SightingsRepository(Protocol):
         or None if nothing has been recorded yet."""
         ...
 
+    def list_sightings(self) -> list[ServerSighting]:
+        """Return every currently-stored sighting for this place."""
+        ...
+
     def upsert_sightings(self, sightings: list[ServerSighting]) -> None:
         """Persist sightings. Must not move a job's first_seen/first_seen_playing."""
         ...
