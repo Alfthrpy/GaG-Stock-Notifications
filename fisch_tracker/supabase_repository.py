@@ -18,6 +18,13 @@ def _parse_utc(value: str) -> datetime:
 
 
 class SupabaseSightingsRepository:
+    # PostgREST caps a single response at 1000 rows by default. Without
+    # paginating past that, list_sightings silently drops rows once the
+    # (unbounded-until-cleanup) sightings table grows past 1000 -- which
+    # row survives is arbitrary since no ORDER BY is specified, so this
+    # showed up live as a confirmed server nondeterministically vanishing.
+    PAGE_SIZE = 1000
+
     def __init__(self, supabase_client: Any, place_id: int):
         self._client = supabase_client
         self._place_id = place_id
@@ -42,10 +49,18 @@ class SupabaseSightingsRepository:
         }
 
     def list_sightings(self, since: datetime | None = None) -> list[ServerSighting]:
-        query = self._client.table(TABLE).select("*").eq("place_id", self._place_id)
-        if since is not None:
-            query = query.gte("last_seen", since.isoformat())
-        response = query.execute()
+        rows: list[dict[str, Any]] = []
+        start = 0
+        while True:
+            query = self._client.table(TABLE).select("*").eq("place_id", self._place_id)
+            if since is not None:
+                query = query.gte("last_seen", since.isoformat())
+            page = query.range(start, start + self.PAGE_SIZE - 1).execute().data
+            rows.extend(page)
+            if len(page) < self.PAGE_SIZE:
+                break
+            start += self.PAGE_SIZE
+
         return [
             ServerSighting(
                 job_id=row["job_id"],
@@ -56,7 +71,7 @@ class SupabaseSightingsRepository:
                 max_players=row["max_players"],
                 age_confirmed=row["age_confirmed"],
             )
-            for row in response.data
+            for row in rows
         ]
 
     def get_epoch(self) -> datetime | None:

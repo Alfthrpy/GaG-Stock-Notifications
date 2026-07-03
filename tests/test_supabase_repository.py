@@ -54,17 +54,34 @@ class FakeQuery:
         self.calls.append(("delete", args, kwargs))
         return self
 
+    def range(self, *args, **kwargs):
+        self.calls.append(("range", args, kwargs))
+        return self
+
     def execute(self):
         return FakeExecuteResult(self._data)
 
 
 class FakeSupabaseClient:
-    def __init__(self, data=None):
-        self.query = FakeQuery(data or [])
+    def __init__(self, data=None, pages=None):
+        """data= for the common single-response case (client.query holds
+        the one FakeQuery built). pages= simulates real pagination: each
+        .table() call consumes the next page and builds a fresh FakeQuery,
+        recorded in client.queries so tests can inspect per-page calls."""
+        self._pages = list(pages) if pages is not None else None
+        self.queries: list[FakeQuery] = []
         self.table_names = []
+        self.query = FakeQuery(data or []) if self._pages is None else None
 
     def table(self, name):
         self.table_names.append(name)
+        if self._pages is not None:
+            page_data = self._pages.pop(0) if self._pages else []
+            query = FakeQuery(page_data)
+            self.queries.append(query)
+            self.query = query
+            return query
+        self.queries.append(self.query)
         return self.query
 
 
@@ -165,6 +182,48 @@ def test_list_sightings_filters_by_since_when_given():
     repo.list_sightings(since=since)
 
     assert ("gte", ("last_seen", since.isoformat()), {}) in client.query.calls
+
+
+def _row(job_id: str) -> dict:
+    return {
+        "job_id": job_id,
+        "first_seen": "2026-07-03T09:00:00+00:00",
+        "first_seen_playing": 1,
+        "last_seen": "2026-07-03T10:00:00+00:00",
+        "playing": 1,
+        "max_players": 20,
+        "age_confirmed": False,
+    }
+
+
+def test_list_sightings_paginates_past_supabases_default_1000_row_cap():
+    # Supabase/PostgREST caps a single response at 1000 rows by default --
+    # without pagination, list_sightings would silently drop everything
+    # past the first page once the table grows past that (confirmed live:
+    # exactly this happened, a confirmed job_id vanished nondeterministically
+    # once the sightings table crossed 1000 rows).
+    page_size = SupabaseSightingsRepository.PAGE_SIZE
+    full_page = [_row(f"job-{i}") for i in range(page_size)]
+    partial_page = [_row(f"job-extra-{i}") for i in range(37)]
+    client = FakeSupabaseClient(pages=[full_page, partial_page])
+    repo = SupabaseSightingsRepository(client, place_id=42)
+
+    result = repo.list_sightings()
+
+    assert len(result) == page_size + 37
+    assert len(client.queries) == 2
+    assert ("range", (0, page_size - 1), {}) in client.queries[0].calls
+    assert ("range", (page_size, 2 * page_size - 1), {}) in client.queries[1].calls
+
+
+def test_list_sightings_stops_after_a_single_partial_page():
+    client = FakeSupabaseClient(pages=[[_row("job-1"), _row("job-2")]])
+    repo = SupabaseSightingsRepository(client, place_id=42)
+
+    result = repo.list_sightings()
+
+    assert len(result) == 2
+    assert len(client.queries) == 1
 
 
 def test_delete_stale_sightings_deletes_rows_older_than_given_time():
