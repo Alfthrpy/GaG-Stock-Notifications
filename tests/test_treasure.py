@@ -134,7 +134,7 @@ def test_rank_orders_active_servers_before_upcoming_by_urgency():
     sightings = [
         age_for("job-B", 3601),  # just started its active window (599s left)... wait compute below
         age_for("job-A", 3600 + 590),  # 10s left in active window
-        age_for("job-D", 100),  # far from first spawn
+        age_for("job-D", 1000),  # far from first spawn, but still past the confirmation window
         age_for("job-C", 3500),  # 100s until first spawn starts
     ]
 
@@ -145,15 +145,24 @@ def test_rank_orders_active_servers_before_upcoming_by_urgency():
 
 def test_rank_returns_predicted_spawn_metadata():
     now = EPOCH + timedelta(hours=5)
-    sightings = [_sighting("job-real", first_seen=now - timedelta(seconds=100), playing=4, max_players=20, last_seen=now)]
+    sightings = [_sighting("job-real", first_seen=now - timedelta(seconds=1000), playing=4, max_players=20, last_seen=now)]
 
     ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now)
 
     assert len(ranked) == 1
     p = ranked[0]
     assert p.job_id == "job-real"
-    assert p.age_seconds == 100
+    assert p.age_seconds == 1000
     assert p.playing == 4
     assert p.max_players == 20
     assert p.is_active is False
-    assert p.seconds_until_start == 3500
+    assert p.seconds_until_start == 2600
+
+
+def test_rank_excludes_server_that_has_not_survived_confirmation_window():
+    now = EPOCH + timedelta(hours=5)
+    sightings = [_sighting("job-too-new", first_seen=now - timedelta(seconds=100), last_seen=now)]
+
+    ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now)
+
+    assert ranked == []

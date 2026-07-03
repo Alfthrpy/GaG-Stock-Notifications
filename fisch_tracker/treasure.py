@@ -71,7 +71,7 @@ def rank_upcoming_spawns(
     active servers first (soonest to end), then upcoming (soonest to start)."""
     predictions = []
     for sighting in sightings:
-        if not is_age_reliable(sighting.first_seen, sighting.first_seen_playing, epoch, playing_threshold):
+        if not is_age_reliable(sighting.first_seen, sighting.first_seen_playing, epoch, now, playing_threshold):
             continue
         if (now - sighting.last_seen).total_seconds() > recency_threshold_seconds:
             continue

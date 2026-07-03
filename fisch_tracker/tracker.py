@@ -5,7 +5,7 @@ Roblox doesn't expose server creation time, so age is estimated as
 observed a given job_id. Persisting first_seen (via SightingsRepository)
 across process restarts is what keeps this estimate meaningful.
 
-That estimate can still be wrong in two ways, both handled by
+That estimate can still be wrong in three ways, all handled by
 is_age_reliable():
 1. A server already existed when this tracker's very first sweep
    ("epoch") ran, so its true creation time is unknown -- first_seen
@@ -19,6 +19,15 @@ is_age_reliable():
    can't already have a non-trivial player count the first time we
    ever see it, so a high playing count at first sighting is itself
    evidence the "first sighting" wasn't actually its birth.
+3. An OLD server that's dying (population draining as players leave)
+   can also show few players the first time we ever see it, for the
+   same reason as #2 -- it was simply outside our sample until it
+   happened to empty out. Low playing count alone can't distinguish
+   "just born" from "about to close", so we additionally require the
+   server to keep being seen for a confirmation window: a genuinely
+   new server stays alive and gets re-seen for a long time, while a
+   dying one caught near the end of its life tends to close within
+   minutes and never clears the window.
 """
 from __future__ import annotations
 
@@ -32,6 +41,11 @@ from .roblox_api import ServerInstance
 # Anything first sighted above this was almost certainly discovered
 # late, not caught at creation.
 DEFAULT_RELIABILITY_PLAYING_THRESHOLD = 2
+
+# A server must keep being seen for this long after first_seen before
+# it's trusted -- filters out old/dying servers caught near closure,
+# which mostly disappear within minutes rather than persisting.
+DEFAULT_MIN_CONFIRMATION_SECONDS = 15 * 60
 
 
 @dataclass(frozen=True)
@@ -79,9 +93,15 @@ def is_age_reliable(
     first_seen: datetime,
     first_seen_playing: int,
     epoch: datetime,
+    now: datetime,
     playing_threshold: int = DEFAULT_RELIABILITY_PLAYING_THRESHOLD,
+    min_confirmation_seconds: float = DEFAULT_MIN_CONFIRMATION_SECONDS,
 ) -> bool:
-    return first_seen > epoch and first_seen_playing <= playing_threshold
+    return (
+        first_seen > epoch
+        and first_seen_playing <= playing_threshold
+        and (now - first_seen).total_seconds() >= min_confirmation_seconds
+    )
 
 
 def build_sightings(

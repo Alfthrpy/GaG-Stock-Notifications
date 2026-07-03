@@ -4,6 +4,7 @@ import pytest
 
 from fisch_tracker.roblox_api import ServerInstance
 from fisch_tracker.tracker import (
+    DEFAULT_MIN_CONFIRMATION_SECONDS,
     DEFAULT_RELIABILITY_PLAYING_THRESHOLD,
     FirstSeenRecord,
     ServerSighting,
@@ -102,11 +103,13 @@ def test_record_sightings_queries_repository_and_persists_result():
 # -- reliability gate --
 
 
-def test_is_age_reliable_true_when_discovered_after_epoch_with_low_playing():
+def test_is_age_reliable_true_when_discovered_after_epoch_low_playing_and_confirmed():
+    first_seen = EPOCH + timedelta(seconds=1)
     assert is_age_reliable(
-        first_seen=EPOCH + timedelta(seconds=1),
+        first_seen=first_seen,
         first_seen_playing=2,
         epoch=EPOCH,
+        now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS),
         playing_threshold=2,
     ) is True
 
@@ -116,6 +119,7 @@ def test_is_age_reliable_false_when_discovered_in_epoch_sweep():
         first_seen=EPOCH,
         first_seen_playing=1,
         epoch=EPOCH,
+        now=EPOCH + timedelta(hours=5),
         playing_threshold=2,
     ) is False
 
@@ -124,22 +128,56 @@ def test_is_age_reliable_false_when_first_sighting_playing_exceeds_threshold():
     # can't genuinely be brand new if it already had a bunch of players
     # the very first time we ever saw it -- we probably just discovered
     # a pre-existing server late, not caught it being created.
+    first_seen = EPOCH + timedelta(hours=5)
     assert is_age_reliable(
-        first_seen=EPOCH + timedelta(hours=5),
+        first_seen=first_seen,
         first_seen_playing=8,
         epoch=EPOCH,
+        now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS),
         playing_threshold=2,
     ) is False
 
 
-def test_is_age_reliable_uses_default_threshold_when_not_given():
+def test_is_age_reliable_false_when_not_survived_confirmation_window_yet():
+    # a server that's actually old and dying can also show up with few
+    # players the first time we ever see it (it was just outside our
+    # sample until it happened to empty out near the end of its life).
+    # Requiring it to keep being seen for a while filters most of those
+    # out, since a truly-dying server tends to close within minutes.
+    first_seen = EPOCH + timedelta(hours=5)
     assert is_age_reliable(
-        first_seen=EPOCH + timedelta(hours=5),
+        first_seen=first_seen,
+        first_seen_playing=1,
+        epoch=EPOCH,
+        now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS - 1),
+        playing_threshold=2,
+    ) is False
+
+
+def test_is_age_reliable_true_right_at_confirmation_window_boundary():
+    first_seen = EPOCH + timedelta(hours=5)
+    assert is_age_reliable(
+        first_seen=first_seen,
+        first_seen_playing=1,
+        epoch=EPOCH,
+        now=first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS),
+        playing_threshold=2,
+    ) is True
+
+
+def test_is_age_reliable_uses_default_thresholds_when_not_given():
+    first_seen = EPOCH + timedelta(hours=5)
+    confirmed_now = first_seen + timedelta(seconds=DEFAULT_MIN_CONFIRMATION_SECONDS)
+
+    assert is_age_reliable(
+        first_seen=first_seen,
         first_seen_playing=DEFAULT_RELIABILITY_PLAYING_THRESHOLD + 1,
         epoch=EPOCH,
+        now=confirmed_now,
     ) is False
     assert is_age_reliable(
-        first_seen=EPOCH + timedelta(hours=5),
+        first_seen=first_seen,
         first_seen_playing=DEFAULT_RELIABILITY_PLAYING_THRESHOLD,
         epoch=EPOCH,
+        now=confirmed_now,
     ) is True
