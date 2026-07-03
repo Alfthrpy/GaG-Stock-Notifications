@@ -27,7 +27,7 @@ class SupabaseSightingsRepository:
             return {}
         response = (
             self._client.table(TABLE)
-            .select("job_id, first_seen, first_seen_playing")
+            .select("job_id, first_seen, first_seen_playing, age_confirmed")
             .eq("place_id", self._place_id)
             .in_("job_id", job_ids)
             .execute()
@@ -36,6 +36,7 @@ class SupabaseSightingsRepository:
             row["job_id"]: FirstSeenRecord(
                 first_seen=_parse_utc(row["first_seen"]),
                 first_seen_playing=row["first_seen_playing"],
+                age_confirmed=row["age_confirmed"],
             )
             for row in response.data
         }
@@ -50,6 +51,7 @@ class SupabaseSightingsRepository:
                 last_seen=_parse_utc(row["last_seen"]),
                 playing=row["playing"],
                 max_players=row["max_players"],
+                age_confirmed=row["age_confirmed"],
             )
             for row in response.data
         ]
@@ -79,7 +81,18 @@ class SupabaseSightingsRepository:
                 "last_seen": s.last_seen.isoformat(),
                 "playing": s.playing,
                 "max_players": s.max_players,
+                "age_confirmed": s.age_confirmed,
             }
             for s in sightings
         ]
         self._client.table(TABLE).upsert(rows, on_conflict="place_id,job_id").execute()
+
+    def confirm_age(self, job_id: str, first_seen: datetime, confirmed_at: datetime) -> None:
+        row = {
+            "place_id": self._place_id,
+            "job_id": job_id,
+            "first_seen": first_seen.isoformat(),
+            "last_seen": confirmed_at.isoformat(),
+            "age_confirmed": True,
+        }
+        self._client.table(TABLE).upsert(row, on_conflict="place_id,job_id", default_to_null=False).execute()

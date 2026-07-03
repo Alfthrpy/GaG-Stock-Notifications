@@ -68,7 +68,14 @@ def test_get_first_seen_records_returns_empty_dict_without_querying_when_no_job_
 
 def test_get_first_seen_records_parses_rows():
     client = FakeSupabaseClient(
-        data=[{"job_id": "job-1", "first_seen": "2026-07-03T10:00:00+00:00", "first_seen_playing": 2}]
+        data=[
+            {
+                "job_id": "job-1",
+                "first_seen": "2026-07-03T10:00:00+00:00",
+                "first_seen_playing": 2,
+                "age_confirmed": True,
+            }
+        ]
     )
     repo = SupabaseSightingsRepository(client, place_id=42)
 
@@ -76,7 +83,9 @@ def test_get_first_seen_records_parses_rows():
 
     assert result == {
         "job-1": FirstSeenRecord(
-            first_seen=datetime(2026, 7, 3, 10, 0, 0, tzinfo=timezone.utc), first_seen_playing=2
+            first_seen=datetime(2026, 7, 3, 10, 0, 0, tzinfo=timezone.utc),
+            first_seen_playing=2,
+            age_confirmed=True,
         )
     }
     assert client.table_names == ["fisch_server_sightings"]
@@ -112,6 +121,7 @@ def test_list_sightings_parses_rows_into_server_sighting():
                 "last_seen": "2026-07-03T10:00:00+00:00",
                 "playing": 5,
                 "max_players": 20,
+                "age_confirmed": True,
             }
         ]
     )
@@ -127,6 +137,7 @@ def test_list_sightings_parses_rows_into_server_sighting():
             last_seen=datetime(2026, 7, 3, 10, 0, 0, tzinfo=timezone.utc),
             playing=5,
             max_players=20,
+            age_confirmed=True,
         )
     ]
     assert client.table_names == ["fisch_server_sightings"]
@@ -160,6 +171,7 @@ def test_upsert_sightings_sends_rows_with_on_conflict_place_id_job_id():
             "last_seen": T0.isoformat(),
             "playing": 3,
             "max_players": 8,
+            "age_confirmed": False,
         }
     ]
     assert kwargs == {"on_conflict": "place_id,job_id"}
@@ -172,3 +184,25 @@ def test_upsert_sightings_does_nothing_for_empty_list():
     repo.upsert_sightings([])
 
     assert client.table_names == []
+
+
+def test_confirm_age_upserts_first_seen_last_seen_and_age_confirmed_flag():
+    client = FakeSupabaseClient()
+    repo = SupabaseSightingsRepository(client, place_id=42)
+
+    repo.confirm_age("job-1", first_seen=T0 - timedelta(hours=2), confirmed_at=T0)
+
+    upsert_call = next(c for c in client.query.calls if c[0] == "upsert")
+    row, kwargs = upsert_call[1][0], upsert_call[2]
+    assert row == {
+        "place_id": 42,
+        "job_id": "job-1",
+        "first_seen": (T0 - timedelta(hours=2)).isoformat(),
+        "last_seen": T0.isoformat(),
+        "age_confirmed": True,
+    }
+    # first_seen_playing/playing/max_players are intentionally omitted (a
+    # regular sweep fills those in); default_to_null=False makes postgrest
+    # fall back to the columns' SQL defaults instead of sending NULL and
+    # violating their NOT NULL constraint if this job_id is brand new.
+    assert kwargs == {"on_conflict": "place_id,job_id", "default_to_null": False}

@@ -72,7 +72,7 @@ def test_negative_age_rejected():
 # -- rank_upcoming_spawns --
 
 
-def _sighting(job_id, first_seen, first_seen_playing=1, last_seen=None, playing=1, max_players=20):
+def _sighting(job_id, first_seen, first_seen_playing=1, last_seen=None, playing=1, max_players=20, age_confirmed=False):
     return ServerSighting(
         job_id=job_id,
         first_seen=first_seen,
@@ -80,6 +80,7 @@ def _sighting(job_id, first_seen, first_seen_playing=1, last_seen=None, playing=
         last_seen=last_seen or first_seen,
         playing=playing,
         max_players=max_players,
+        age_confirmed=age_confirmed,
     )
 
 
@@ -157,6 +158,7 @@ def test_rank_returns_predicted_spawn_metadata():
     assert p.max_players == 20
     assert p.is_active is False
     assert p.seconds_until_start == 2600
+    assert p.is_confirmed is False
 
 
 def test_rank_excludes_server_that_has_not_survived_confirmation_window():
@@ -166,3 +168,40 @@ def test_rank_excludes_server_that_has_not_survived_confirmation_window():
     ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now)
 
     assert ranked == []
+
+
+# -- manually confirmed servers bypass the heuristic entirely --
+
+
+def test_rank_includes_age_confirmed_server_even_if_it_fails_the_heuristic():
+    now = EPOCH + timedelta(hours=5)
+    sightings = [
+        _sighting(
+            "job-confirmed",
+            first_seen=now - timedelta(seconds=50),  # would fail confirmation-window heuristic
+            first_seen_playing=15,  # would fail playing-count heuristic too
+            last_seen=now,
+            age_confirmed=True,
+        ),
+    ]
+
+    ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now)
+
+    assert len(ranked) == 1
+    assert ranked[0].job_id == "job-confirmed"
+    assert ranked[0].is_confirmed is True
+
+
+def test_rank_includes_age_confirmed_server_even_if_first_seen_predates_epoch():
+    # a player can report a server's real age even for one first
+    # discovered in the epoch sweep -- age_confirmed means "trust this
+    # first_seen", independent of when we happened to first see it.
+    now = EPOCH + timedelta(hours=5)
+    sightings = [
+        _sighting("job-old-confirmed", first_seen=EPOCH - timedelta(hours=1), last_seen=now, age_confirmed=True)
+    ]
+
+    ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now)
+
+    assert len(ranked) == 1
+    assert ranked[0].is_confirmed is True

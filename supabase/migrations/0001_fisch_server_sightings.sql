@@ -8,6 +8,10 @@
 -- very first-ever sweep, i.e. MIN(first_seen)): a server is only trusted
 -- as truly age-tracked if first_seen > epoch AND first_seen_playing is
 -- low -- otherwise it was likely discovered late, not caught at birth.
+-- age_confirmed: set when a player reports the server's real age as
+-- shown in Fisch's own in-game UI. Ground truth overrides the
+-- first_seen_playing heuristic entirely -- see confirm_age() /
+-- apply_age_confirmation() in fisch_tracker/tracker.py.
 create table if not exists fisch_server_sightings (
     place_id bigint not null,
     job_id text not null,
@@ -16,6 +20,7 @@ create table if not exists fisch_server_sightings (
     last_seen timestamptz not null,
     playing integer not null default 0,
     max_players integer not null default 0,
+    age_confirmed boolean not null default false,
     primary key (place_id, job_id)
 );
 

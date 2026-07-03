@@ -58,6 +58,7 @@ class PredictedSpawn:
     seconds_until_end: float
     playing: int
     max_players: int
+    is_confirmed: bool
 
 
 def rank_upcoming_spawns(
@@ -67,11 +68,17 @@ def rank_upcoming_spawns(
     recency_threshold_seconds: float = DEFAULT_RECENCY_THRESHOLD_SECONDS,
     playing_threshold: int = DEFAULT_RELIABILITY_PLAYING_THRESHOLD,
 ) -> list[PredictedSpawn]:
-    """Reliable, still-live servers ranked by treasure-spawn urgency:
-    active servers first (soonest to end), then upcoming (soonest to start)."""
+    """Servers ranked by treasure-spawn urgency (active first, soonest to
+    end; then upcoming, soonest to start). Includes both age-confirmed
+    (ground truth, ranked_upcoming_spawns trusts these unconditionally)
+    and heuristic-passed (unconfirmed guess) servers -- callers should
+    use PredictedSpawn.is_confirmed to tell them apart."""
     predictions = []
     for sighting in sightings:
-        if not is_age_reliable(sighting.first_seen, sighting.first_seen_playing, epoch, now, playing_threshold):
+        if not (
+            sighting.age_confirmed
+            or is_age_reliable(sighting.first_seen, sighting.first_seen_playing, epoch, now, playing_threshold)
+        ):
             continue
         if (now - sighting.last_seen).total_seconds() > recency_threshold_seconds:
             continue
@@ -87,6 +94,7 @@ def rank_upcoming_spawns(
                 seconds_until_end=window.seconds_until_end,
                 playing=sighting.playing,
                 max_players=sighting.max_players,
+                is_confirmed=sighting.age_confirmed,
             )
         )
 

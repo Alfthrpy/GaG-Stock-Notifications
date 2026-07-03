@@ -8,8 +8,10 @@ from fisch_tracker.tracker import (
     DEFAULT_RELIABILITY_PLAYING_THRESHOLD,
     FirstSeenRecord,
     ServerSighting,
+    apply_age_confirmation,
     build_sightings,
     compute_age_seconds,
+    compute_confirmed_first_seen,
     is_age_reliable,
     record_sightings,
 )
@@ -25,6 +27,7 @@ class FakeRepository:
         self.existing_first_seen = dict(existing_first_seen or {})
         self.epoch = epoch
         self.upserted: list[ServerSighting] = []
+        self.confirmations: list[tuple[str, datetime, datetime]] = []
 
     def get_first_seen_records(self, job_ids):
         return {jid: rec for jid, rec in self.existing_first_seen.items() if jid in job_ids}
@@ -34,6 +37,9 @@ class FakeRepository:
 
     def upsert_sightings(self, sightings):
         self.upserted.extend(sightings)
+
+    def confirm_age(self, job_id, first_seen, confirmed_at):
+        self.confirmations.append((job_id, first_seen, confirmed_at))
 
 
 def test_compute_age_seconds():
@@ -78,6 +84,30 @@ def test_build_sightings_keeps_original_first_seen_and_playing_for_known_server(
     assert sightings[0].first_seen_playing == 1
     assert sightings[0].last_seen == T0
     assert sightings[0].playing == 15
+
+
+def test_build_sightings_new_server_is_not_age_confirmed():
+    servers = [ServerInstance(job_id="job-new", playing=1, max_players=20)]
+
+    sightings = build_sightings(servers, existing_first_seen={}, seen_at=T0)
+
+    assert sightings[0].age_confirmed is False
+
+
+def test_build_sightings_preserves_age_confirmed_flag_across_regular_sweeps():
+    # a regular sweep re-observing an already player-confirmed server must
+    # not silently clear the confirmation.
+    original = FirstSeenRecord(
+        first_seen=T0 - timedelta(hours=3), first_seen_playing=5, age_confirmed=True
+    )
+    servers = [ServerInstance(job_id="job-confirmed", playing=7, max_players=20)]
+
+    sightings = build_sightings(
+        servers, existing_first_seen={"job-confirmed": original}, seen_at=T0
+    )
+
+    assert sightings[0].first_seen == T0 - timedelta(hours=3)
+    assert sightings[0].age_confirmed is True
 
 
 def test_record_sightings_queries_repository_and_persists_result():
@@ -181,3 +211,26 @@ def test_is_age_reliable_uses_default_thresholds_when_not_given():
         epoch=EPOCH,
         now=confirmed_now,
     ) is True
+
+
+# -- manual age confirmation (ground truth reported from Fisch's in-game UI) --
+
+
+def test_compute_confirmed_first_seen_subtracts_reported_age():
+    observed_at = T0
+    first_seen = compute_confirmed_first_seen(reported_age_seconds=2 * 3600 + 34 * 60, observed_at=observed_at)
+
+    assert first_seen == T0 - timedelta(hours=2, minutes=34)
+
+
+def test_compute_confirmed_first_seen_rejects_negative_age():
+    with pytest.raises(ValueError):
+        compute_confirmed_first_seen(reported_age_seconds=-1, observed_at=T0)
+
+
+def test_apply_age_confirmation_writes_implied_first_seen_to_repository():
+    repo = FakeRepository()
+
+    apply_age_confirmation(repo, job_id="job-1", reported_age_seconds=3600, observed_at=T0)
+
+    assert repo.confirmations == [("job-1", T0 - timedelta(hours=1), T0)]
