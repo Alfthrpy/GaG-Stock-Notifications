@@ -61,6 +61,7 @@ async def run_forever() -> None:
     async with aiohttp.ClientSession() as session:
         while True:
             max_pages = pages_for_tick(tick)
+            logger.info("tick %d (max_pages=%d): sweep starting", tick, max_pages)
             try:
                 result = await run_sweep(session, repository, place_id, rate_limiter=rate_limiter, max_pages=max_pages)
                 logger.info(

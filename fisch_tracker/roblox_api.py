@@ -15,12 +15,15 @@ Two undocumented constraints observed live against this endpoint:
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
 
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from .rate_limiter import AdaptiveRateLimiter, parse_rate_limit_headers
+
+_logger = logging.getLogger(__name__)
 
 SERVERS_URL = "https://games.roblox.com/v1/games/{place_id}/servers/Public"
 
@@ -153,11 +156,13 @@ async def fetch_all_public_servers(
     servers: list[ServerInstance] = []
     cursor: str | None = None
 
-    for _ in range(max_pages):
+    for page_number in range(1, max_pages + 1):
         page_servers, cursor = await fetch_servers_page(
             session, place_id, cursor=cursor, limit=limit, rate_limiter=rate_limiter
         )
         servers.extend(page_servers)
+        if max_pages > 1:
+            _logger.info("page %d: +%d servers (%d so far)", page_number, len(page_servers), len(servers))
         if not cursor:
             break
 
