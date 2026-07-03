@@ -122,6 +122,46 @@ def test_rank_excludes_stale_servers_not_seen_recently():
     assert ranked == []
 
 
+def test_rank_uses_a_much_longer_recency_window_for_confirmed_servers():
+    # a confirmed server's last_seen only gets refreshed if a regular
+    # sweep happens to re-sample that exact job_id, which our
+    # low-population-biased sampling can't guarantee for a mid/high
+    # population server -- it shouldn't vanish from the list just
+    # because it hasn't been reswept in the last few minutes.
+    now = EPOCH + timedelta(hours=5)
+    sightings = [
+        _sighting(
+            "job-confirmed-not-resampled",
+            first_seen=now - timedelta(days=1),
+            last_seen=now - timedelta(hours=2),
+            age_confirmed=True,
+        ),
+    ]
+
+    ranked = rank_upcoming_spawns(sightings, epoch=EPOCH, now=now, recency_threshold_seconds=300)
+
+    assert len(ranked) == 1
+    assert ranked[0].job_id == "job-confirmed-not-resampled"
+
+
+def test_rank_still_excludes_confirmed_server_stale_beyond_the_longer_window():
+    now = EPOCH + timedelta(hours=5)
+    sightings = [
+        _sighting(
+            "job-confirmed-long-gone",
+            first_seen=now - timedelta(days=3),
+            last_seen=now - timedelta(days=2),
+            age_confirmed=True,
+        ),
+    ]
+
+    ranked = rank_upcoming_spawns(
+        sightings, epoch=EPOCH, now=now, confirmed_recency_threshold_seconds=6 * 3600
+    )
+
+    assert ranked == []
+
+
 def test_rank_orders_active_servers_before_upcoming_by_urgency():
     # job-A: about to end soon (more urgent than job-B which just started)
     # job-B: active, ends later

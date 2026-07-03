@@ -17,6 +17,13 @@ CYCLE_SECONDS = 70 * 60
 
 DEFAULT_RECENCY_THRESHOLD_SECONDS = 300
 
+# Regular sweeps sample low-population servers first, so a confirmed
+# server with moderate/high population may not get re-swept (and its
+# last_seen refreshed) for a long time even while still alive. Use a
+# far more generous window for confirmed sightings so they don't
+# vanish from the list just because our sampling missed them.
+DEFAULT_CONFIRMED_RECENCY_THRESHOLD_SECONDS = 6 * 3600
+
 
 @dataclass(frozen=True)
 class SpawnWindow:
@@ -66,6 +73,7 @@ def rank_upcoming_spawns(
     epoch: datetime,
     now: datetime,
     recency_threshold_seconds: float = DEFAULT_RECENCY_THRESHOLD_SECONDS,
+    confirmed_recency_threshold_seconds: float = DEFAULT_CONFIRMED_RECENCY_THRESHOLD_SECONDS,
     playing_threshold: int = DEFAULT_RELIABILITY_PLAYING_THRESHOLD,
 ) -> list[PredictedSpawn]:
     """Servers ranked by treasure-spawn urgency (active first, soonest to
@@ -80,7 +88,10 @@ def rank_upcoming_spawns(
             or is_age_reliable(sighting.first_seen, sighting.first_seen_playing, epoch, now, playing_threshold)
         ):
             continue
-        if (now - sighting.last_seen).total_seconds() > recency_threshold_seconds:
+        effective_recency_threshold = (
+            confirmed_recency_threshold_seconds if sighting.age_confirmed else recency_threshold_seconds
+        )
+        if (now - sighting.last_seen).total_seconds() > effective_recency_threshold:
             continue
 
         age = compute_age_seconds(sighting.first_seen, now)
